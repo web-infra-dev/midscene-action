@@ -140,7 +140,7 @@ To use an existing Worker, set `cloudflare-worker-name` to its name. The default
 
 Open the workflow run's **Summary** for test results and artifact downloads. Published reports also have an online preview link.
 
-Execution, artifact upload, Summary and publication use the same artifact root. The Action passes its absolute path to the test command as `MIDSCENE_RUN_DIR`. If both `run-directory` and an inherited `MIDSCENE_RUN_DIR` are provided, they must resolve to the same directory. Default runs also collect older `.midscene` results.
+Results are collected from `midscene_run/` by default. To use another directory, set `run-directory` or `MIDSCENE_RUN_DIR`; if both are set, they must point to the same directory.
 
 For a project configured with `output.runDir: 'artifacts'`, set the matching Action input:
 
@@ -151,7 +151,7 @@ For a project configured with `output.runDir: 'artifacts'`, set the matching Act
     run-directory: artifacts
 ```
 
-Cloudflare publication supports self-contained single HTML and external-asset reports. Single HTML is copied to a temporary `index.html`; external reports publish their complete report directory. Publishing expects one Test run in the selected results directory. The test command must produce Midscene Test results; missing results fail the Summary step with a configuration hint.
+Cloudflare publication supports both single HTML and external-asset reports. Publishing requires exactly one Test run in the selected results directory. If the command does not produce Midscene Test results, the Summary step reports an error with a configuration hint.
 
 ![Test results, report download, and online report links in the Summary](assets/test-summary.png)
 
