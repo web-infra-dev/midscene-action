@@ -82,17 +82,17 @@ Set the model secret and variables used above in your repository's **Settings â†
 
 See [action.yml](action.yml) for the full definitions.
 
-| Input                    | Required        | Default                              | Description                                                                                            |
-| ------------------------ | --------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `working-directory`      | Yes             | None                                 | Test project directory, relative to the workspace. Use `.` for the repository root.                    |
-| `command`                | No              | `npx midscene-test`                  | Command to run Midscene tests in Bash. Override it with a project script such as `npm test` if needed. |
-| `run-directory`          | No              | `MIDSCENE_RUN_DIR` or `midscene_run` | Artifact root, relative to `working-directory` or absolute. Match the project's `output.runDir`.       |
-| `artifact-name`          | No              | `midscene-results`                   | Artifact name. Must be unique within a workflow run.                                                   |
-| `retention-days`         | No              | `14`                                 | Artifact retention period in days.                                                                     |
-| `publish-pages`          | No              | `false`                              | Set to `true` to publish reports to Cloudflare Workers.                                                |
-| `cloudflare-api-token`   | When publishing | None                                 | Cloudflare API token, passed from a GitHub Actions secret.                                             |
-| `cloudflare-account-id`  | When publishing | None                                 | Cloudflare account ID.                                                                                 |
-| `cloudflare-worker-name` | No              | `midscene-reports`                   | Worker name. Created automatically if needed and the token has permission.                             |
+| Input                    | Required        | Default                              | Description                                                                                              |
+| ------------------------ | --------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `working-directory`      | Yes             | None                                 | Test project directory, relative to the workspace. Use `.` for the repository root.                      |
+| `command`                | No              | `npx midscene-test`                  | Command to run Midscene tests in Bash. Override it with a project script such as `npm test` if needed.   |
+| `run-directory`          | No              | `MIDSCENE_RUN_DIR` or `midscene_run` | Artifact root, relative to `working-directory` or absolute. Passed to the command as `MIDSCENE_RUN_DIR`. |
+| `artifact-name`          | No              | `midscene-results`                   | Artifact name. Must be unique within a workflow run.                                                     |
+| `retention-days`         | No              | `14`                                 | Artifact retention period in days.                                                                       |
+| `publish-pages`          | No              | `false`                              | Set to `true` to publish reports to Cloudflare Workers.                                                  |
+| `cloudflare-api-token`   | When publishing | None                                 | Cloudflare API token, passed from a GitHub Actions secret.                                               |
+| `cloudflare-account-id`  | When publishing | None                                 | Cloudflare account ID.                                                                                   |
+| `cloudflare-worker-name` | No              | `midscene-reports`                   | Worker name. Created automatically if needed and the token has permission.                               |
 
 ## Publish reports to Cloudflare Workers
 
@@ -142,7 +142,7 @@ Open the workflow run's **Summary** for test results and artifact downloads. Pub
 
 Results are collected from `midscene_run/` by default. To use another directory, set `run-directory` or `MIDSCENE_RUN_DIR`; if both are set, they must point to the same directory.
 
-For a project configured with `output.runDir: 'artifacts'`, set the matching Action input:
+To save results under `artifacts/`, set the Action input:
 
 ```yaml
 - uses: web-infra-dev/midscene-action@v1

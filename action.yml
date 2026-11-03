@@ -11,7 +11,7 @@ inputs:
     description: Command to run the installed Midscene test suite.
     default: npx midscene-test
   run-directory:
-    description: Artifact root relative to working-directory, or an absolute path. Match output.runDir when configured. Defaults to MIDSCENE_RUN_DIR or midscene_run.
+    description: Artifact root relative to working-directory, or an absolute path. Passed to the test command as MIDSCENE_RUN_DIR. Defaults to MIDSCENE_RUN_DIR or midscene_run.
   artifact-name:
     description: Report artifact name; use unique names in a matrix.
     default: midscene-results

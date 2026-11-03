@@ -115,7 +115,7 @@ async function run() {
   );
   if (!files.length)
     throw new Error(
-      'No Midscene Test result.md found. Set run-directory to match output.runDir or MIDSCENE_RUN_DIR.',
+      'No Midscene Test result.md found. Check the test command and the MIDSCENE_RUN_DIR or run-directory setting.',
     );
 }
 

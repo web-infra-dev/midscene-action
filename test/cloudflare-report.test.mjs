@@ -318,6 +318,6 @@ test('rejects conflicting input and environment roots before running tests', asy
 test('reports missing results instead of writing an empty success Summary', async (t) => {
   const f = await fixture(t);
   await assert.rejects(writeSummary(f), {
-    stderr: /No Midscene Test result.md found/,
+    stderr: /No Midscene Test result\.md found\.[\s\S]*MIDSCENE_RUN_DIR/,
   });
 });
