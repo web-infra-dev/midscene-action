@@ -82,16 +82,17 @@ jobs:
 
 完整定义见 [action.yml](action.yml)。
 
-| 参数                     | 是否必填   | 默认值              | 说明                                                                   |
-| ------------------------ | ---------- | ------------------- | ---------------------------------------------------------------------- |
-| `working-directory`      | 是         | 无                  | 测试项目目录，相对于工作区。仓库根目录填 `.`。                         |
-| `command`                | 否         | `npx midscene-test` | 在 Bash 中运行 Midscene 测试的命令，可按需改为 `npm test` 等项目脚本。 |
-| `artifact-name`          | 否         | `midscene-results`  | Artifact 名称，同一次工作流运行中必须唯一。                            |
-| `retention-days`         | 否         | `14`                | Artifact 的保留天数。                                                  |
-| `publish-pages`          | 否         | `false`             | 设为 `true` 时将报告发布到 Cloudflare Workers。                        |
-| `cloudflare-api-token`   | 发布时必填 | 无                  | Cloudflare API Token，通过 GitHub Actions Secret 传入。                |
-| `cloudflare-account-id`  | 发布时必填 | 无                  | Cloudflare 账号 ID。                                                   |
-| `cloudflare-worker-name` | 否         | `midscene-reports`  | Worker 名称。不存在时，若 Token 有相应权限，Action 会自动创建。        |
+| 参数                     | 是否必填   | 默认值                               | 说明                                                                                    |
+| ------------------------ | ---------- | ------------------------------------ | --------------------------------------------------------------------------------------- |
+| `working-directory`      | 是         | 无                                   | 测试项目目录，相对于工作区。仓库根目录填 `.`。                                          |
+| `command`                | 否         | `npx midscene-test`                  | 在 Bash 中运行 Midscene 测试的命令，可按需改为 `npm test` 等项目脚本。                  |
+| `run-directory`          | 否         | `MIDSCENE_RUN_DIR` 或 `midscene_run` | 产物根目录，相对于 `working-directory`，也支持绝对路径；与项目的 `output.runDir` 对齐。 |
+| `artifact-name`          | 否         | `midscene-results`                   | Artifact 名称，同一次工作流运行中必须唯一。                                             |
+| `retention-days`         | 否         | `14`                                 | Artifact 的保留天数。                                                                   |
+| `publish-pages`          | 否         | `false`                              | 设为 `true` 时将报告发布到 Cloudflare Workers。                                         |
+| `cloudflare-api-token`   | 发布时必填 | 无                                   | Cloudflare API Token，通过 GitHub Actions Secret 传入。                                 |
+| `cloudflare-account-id`  | 发布时必填 | 无                                   | Cloudflare 账号 ID。                                                                    |
+| `cloudflare-worker-name` | 否         | `midscene-reports`                   | Worker 名称。不存在时，若 Token 有相应权限，Action 会自动创建。                         |
 
 ## 发布报告到 Cloudflare Workers
 
@@ -138,6 +139,19 @@ jobs:
 ## 报告
 
 在工作流运行的 **Summary（摘要）** 中查看测试结果和下载报告。报告发布成功后，还会显示在线预览链接。
+
+执行、Artifact 上传、Summary 和发布共用同一个产物根目录。Action 会将它的绝对路径作为 `MIDSCENE_RUN_DIR` 传给测试命令。`run-directory` 与已有 `MIDSCENE_RUN_DIR` 同时提供时，必须指向同一目录。使用默认根时，也会收集旧的 `.midscene` 结果。
+
+项目配置了 `output.runDir: 'artifacts'` 时，设置对应的 Action 输入：
+
+```yaml
+- uses: web-infra-dev/midscene-action@v1
+  with:
+    working-directory: tests/midscene
+    run-directory: artifacts
+```
+
+Cloudflare 发布支持自包含单 HTML 和外置资源报告。单 HTML 会复制为临时目录中的 `index.html`；外置报告发布完整报告目录。发布要求所选结果目录中只有一轮 Test 运行。测试命令需要产出 Midscene Test 结果；缺少结果时，Summary 步骤会失败并提示检查目录配置。
 
 ![Summary 中的测试结果、报告下载和在线报告入口](assets/test-summary.png)
 

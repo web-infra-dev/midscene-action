@@ -10,6 +10,8 @@ inputs:
   command:
     description: Command to run the installed Midscene test suite.
     default: npx midscene-test
+  run-directory:
+    description: Artifact root relative to working-directory, or an absolute path. Match output.runDir when configured. Defaults to MIDSCENE_RUN_DIR or midscene_run.
   artifact-name:
     description: Report artifact name; use unique names in a matrix.
     default: midscene-results
@@ -68,6 +70,14 @@ runs:
           exit 1
         fi
 
+    - name: Resolve Midscene artifact directories
+      id: artifacts
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        MIDSCENE_ACTION_RUN_DIR: ${{ inputs.run-directory }}
+      run: node "$GITHUB_ACTION_PATH/src/artifacts.mjs" paths
+
     - name: Run all Midscene cases
       id: test
       continue-on-error: true
@@ -75,6 +85,7 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         TEST_COMMAND: ${{ inputs.command }}
+        MIDSCENE_RUN_DIR: ${{ steps.artifacts.outputs.run-directory }}
       run: bash -e -o pipefail -c "$TEST_COMMAND"
 
     - name: Upload Midscene test report
@@ -83,9 +94,7 @@ runs:
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: ${{ inputs.artifact-name }}
-        path: |
-          ${{ inputs.working-directory }}/midscene_run/
-          ${{ inputs.working-directory }}/.midscene/
+        path: ${{ steps.artifacts.outputs.artifact-paths }}
         include-hidden-files: true
         if-no-files-found: warn
         retention-days: ${{ inputs.retention-days }}
@@ -93,17 +102,11 @@ runs:
     - name: Write test results to Summary
       if: ${{ always() && (steps.test.outcome == 'success' || steps.test.outcome == 'failure') }}
       shell: bash
+      working-directory: ${{ inputs.working-directory }}
       env:
-        TEST_DIRECTORY: ${{ inputs.working-directory }}
+        MIDSCENE_ARTIFACT_ROOTS: ${{ steps.artifacts.outputs.artifact-roots }}
       run: |
-        {
-          for result in "$TEST_DIRECTORY"/midscene_run/test-results/*/result.md "$TEST_DIRECTORY"/.midscene/test-results/*/result.md; do
-            [ -f "$result" ] || continue
-            sed '/^\[Open the Midscene Test report ↗\](/d' "$result"
-            echo
-          done
-          echo "[Download test artifacts]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID#artifacts)"
-        } >> "$GITHUB_STEP_SUMMARY"
+        node "$GITHUB_ACTION_PATH/src/artifacts.mjs" summary
 
     - name: Prepare Cloudflare report
       id: report
@@ -112,6 +115,7 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         CLOUDFLARE_WORKER_NAME: ${{ inputs.cloudflare-worker-name }}
+        MIDSCENE_ARTIFACT_ROOTS: ${{ steps.artifacts.outputs.artifact-roots }}
       run: node "$GITHUB_ACTION_PATH/src/cloudflare-report.mjs"
 
     - name: Deploy report to Cloudflare Workers

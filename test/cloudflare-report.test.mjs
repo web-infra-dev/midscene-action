@@ -4,6 +4,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   realpath,
   rm,
   symlink,
@@ -20,14 +21,18 @@ const script = fileURLToPath(
   new URL('../src/cloudflare-report.mjs', import.meta.url),
 );
 const resultsRoots = ['midscene_run', '.midscene'];
+const actionDirectory = fileURLToPath(new URL('../', import.meta.url));
+const artifactsScript = path.join(actionDirectory, 'src', 'artifacts.mjs');
 
-async function fixture(t) {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'midscene-action-'));
+async function fixture(t, runDirectory = 'midscene_run') {
+  const root = await realpath(
+    await mkdtemp(path.join(os.tmpdir(), 'midscene-action-')),
+  );
   t.after(() => rm(root, { recursive: true, force: true }));
   const project = path.join(root, 'project with spaces');
-  const report = path.join(
+  const report = path.resolve(
     project,
-    'midscene_run',
+    runDirectory,
     'report',
     'run-a',
     'index.html',
@@ -45,7 +50,7 @@ async function writeResult(
   resultsRoot,
   { id = 'run-a', report = f.report } = {},
 ) {
-  const directory = path.join(f.project, resultsRoot, 'test-results', id);
+  const directory = path.resolve(f.project, resultsRoot, 'test-results', id);
   await mkdir(directory, { recursive: true });
   await writeFile(
     path.join(directory, 'summary.json'),
@@ -54,17 +59,55 @@ async function writeResult(
   return directory;
 }
 
-function publish(f) {
+function environment(f, overrides = {}) {
+  const env = { ...process.env };
+  delete env.MIDSCENE_RUN_DIR;
+  delete env.MIDSCENE_ACTION_RUN_DIR;
+  delete env.MIDSCENE_ARTIFACT_ROOTS;
+  return {
+    ...env,
+    RUNNER_TEMP: f.runnerTemp,
+    GITHUB_OUTPUT: f.output,
+    GITHUB_ACTION_PATH: actionDirectory,
+    CLOUDFLARE_WORKER_NAME: 'test-reports',
+    ...overrides,
+  };
+}
+
+function publish(f, overrides = {}) {
   return exec(process.execPath, [script], {
     cwd: f.project,
     timeout: 10_000,
-    env: {
-      ...process.env,
-      RUNNER_TEMP: f.runnerTemp,
-      GITHUB_OUTPUT: f.output,
-      CLOUDFLARE_WORKER_NAME: 'test-reports',
-    },
+    env: environment(f, overrides),
   });
+}
+
+async function writeSummary(f, overrides = {}) {
+  const action = await readFile(
+    new URL('../action.yml', import.meta.url),
+    'utf8',
+  );
+  const run =
+    / {4}- name: Write test results to Summary[\s\S]*? {6}run: \|\n([\s\S]*?)(?=\n {4}- name:)/.exec(
+      action,
+    )?.[1];
+  assert.ok(run);
+  const summary = path.join(f.root, 'github-summary');
+  await exec(
+    'bash',
+    ['-e', '-o', 'pipefail', '-c', run.replace(/^ {8}/gm, '')],
+    {
+      cwd: f.project,
+      env: environment(f, {
+        GITHUB_STEP_SUMMARY: summary,
+        GITHUB_SERVER_URL: 'https://github.com',
+        GITHUB_REPOSITORY: 'test/repo',
+        GITHUB_RUN_ID: '123',
+        ...overrides,
+      }),
+    },
+  );
+  return readFile(summary, 'utf8');
 }
 
 for (const resultsRoot of resultsRoots) {
@@ -103,31 +146,7 @@ for (const resultsRoot of resultsRoots) {
       path.join(result, 'result.md'),
       'Passed: 1\n[Open the Midscene Test report ↗](old-url)\n',
     );
-    const action = await readFile(
-      new URL('../action.yml', import.meta.url),
-      'utf8',
-    );
-    const run =
-      / {4}- name: Write test results to Summary[\s\S]*? {6}run: \|\n([\s\S]*?)(?=\n {4}- name:)/.exec(
-        action,
-      )?.[1];
-    assert.ok(run);
-    const summary = path.join(f.root, 'github-summary');
-    await exec(
-      'bash',
-      ['-e', '-o', 'pipefail', '-c', run.replace(/^ {8}/gm, '')],
-      {
-        env: {
-          ...process.env,
-          TEST_DIRECTORY: f.project,
-          GITHUB_STEP_SUMMARY: summary,
-          GITHUB_SERVER_URL: 'https://github.com',
-          GITHUB_REPOSITORY: 'test/repo',
-          GITHUB_RUN_ID: '123',
-        },
-      },
-    );
-    const content = await readFile(summary, 'utf8');
+    const content = await writeSummary(f);
     assert.match(content, /Passed: 1/);
     assert.doesNotMatch(content, /old-url/);
     assert.match(
@@ -171,7 +190,7 @@ test('rejects an entry outside the report root', async (t) => {
   await writeFile(report, '<html>Private file</html>');
   await writeResult(f, 'midscene_run', { report });
   await assert.rejects(publish(f), {
-    stderr: /must be an index.html file under midscene_run\/report/,
+    stderr: /must be an HTML file under the configured run directory's report/,
   });
 });
 
@@ -180,4 +199,125 @@ test('rejects symbolic links in report assets', async (t) => {
   await writeResult(f, 'midscene_run');
   await symlink(f.output, path.join(path.dirname(f.report), 'outside-link'));
   await assert.rejects(publish(f), { stderr: /without symbolic links/ });
+});
+
+for (const name of ['run.html', 'index.html']) {
+  test(`publishes only the selected self-contained ${name} as index.html`, async (t) => {
+    const f = await fixture(t);
+    const report = path.join(f.project, 'midscene_run', 'report', name);
+    const content = '<html>Self-contained report</html>';
+    await writeFile(report, content);
+    await writeFile(
+      path.join(path.dirname(report), 'private.txt'),
+      'not part of the report',
+    );
+    await writeResult(f, 'midscene_run', { report });
+    await publish(f);
+    const directory = /^directory=(.+)$/m.exec(
+      await readFile(f.output, 'utf8'),
+    )?.[1];
+    const config = JSON.parse(
+      await readFile(path.join(directory, 'wrangler.json'), 'utf8'),
+    );
+    assert.ok(config.assets.directory.startsWith(f.runnerTemp + path.sep));
+    assert.deepEqual(await readdir(config.assets.directory), ['index.html']);
+    assert.equal(
+      await readFile(path.join(config.assets.directory, 'index.html'), 'utf8'),
+      content,
+    );
+    assert.equal(await readFile(report, 'utf8'), content);
+  });
+}
+
+for (const setting of ['MIDSCENE_RUN_DIR', 'MIDSCENE_ACTION_RUN_DIR']) {
+  for (const absolute of [false, true]) {
+    test(`uses ${absolute ? 'absolute' : 'relative'} ${setting} for uploads, Summary and publication`, async (t) => {
+      const f = await fixture(t);
+      const root = absolute
+        ? path.join(f.root, 'outside project')
+        : 'custom artifacts';
+      f.report = path.resolve(f.project, root, 'report', 'run-a', 'index.html');
+      await mkdir(path.dirname(f.report), { recursive: true });
+      await writeFile(f.report, '<html>Custom-root report</html>');
+      const result = await writeResult(f, root);
+      await writeFile(path.join(result, 'result.md'), 'Passed: 1\n');
+      await exec(process.execPath, [artifactsScript, 'paths'], {
+        cwd: f.project,
+        env: environment(f, {
+          [setting]: root,
+          ...(setting === 'MIDSCENE_ACTION_RUN_DIR'
+            ? { MIDSCENE_RUN_DIR: `${root}${path.sep}` }
+            : {}),
+        }),
+      });
+      const output = await readFile(f.output, 'utf8');
+      const runDirectory = /^run-directory=(.+)$/m.exec(output)?.[1];
+      const roots = /^artifact-roots=(.+)$/m.exec(output)?.[1];
+      const paths =
+        /artifact-paths<<MIDSCENE_ARTIFACT_PATHS\n([\s\S]*?)\nMIDSCENE_ARTIFACT_PATHS/m.exec(
+          output,
+        )?.[1];
+      assert.equal(runDirectory, path.resolve(f.project, root));
+      assert.equal(paths, runDirectory);
+      assert.deepEqual(JSON.parse(roots), [runDirectory]);
+      const resolved = { MIDSCENE_ARTIFACT_ROOTS: roots };
+      assert.match(await writeSummary(f, resolved), /Passed: 1/);
+      await publish(f, resolved);
+      const directory = /^directory=(.+)$/m.exec(
+        await readFile(f.output, 'utf8'),
+      )?.[1];
+      const config = JSON.parse(
+        await readFile(path.join(directory, 'wrangler.json'), 'utf8'),
+      );
+      assert.equal(
+        config.assets.directory,
+        await realpath(path.dirname(f.report)),
+      );
+    });
+  }
+}
+
+for (const setting of ['MIDSCENE_RUN_DIR', 'MIDSCENE_ACTION_RUN_DIR']) {
+  test(`keeps legacy results when ${setting} explicitly selects the default root`, async (t) => {
+    const f = await fixture(t);
+    const result = await writeResult(f, '.midscene');
+    await writeFile(path.join(result, 'result.md'), 'Passed: legacy\n');
+    await exec(process.execPath, [artifactsScript, 'paths'], {
+      cwd: f.project,
+      env: environment(f, { [setting]: './midscene_run' }),
+    });
+    const roots = /^artifact-roots=(.+)$/m.exec(
+      await readFile(f.output, 'utf8'),
+    )?.[1];
+    assert.deepEqual(JSON.parse(roots), [
+      path.join(f.project, 'midscene_run'),
+      path.join(f.project, '.midscene'),
+    ]);
+    assert.match(
+      await writeSummary(f, { MIDSCENE_ARTIFACT_ROOTS: roots }),
+      /Passed: legacy/,
+    );
+    await publish(f, { MIDSCENE_ARTIFACT_ROOTS: roots });
+  });
+}
+
+test('rejects conflicting input and environment roots before running tests', async (t) => {
+  const f = await fixture(t);
+  await assert.rejects(
+    exec(process.execPath, [artifactsScript, 'paths'], {
+      cwd: f.project,
+      env: environment(f, {
+        MIDSCENE_ACTION_RUN_DIR: 'a',
+        MIDSCENE_RUN_DIR: 'b',
+      }),
+    }),
+    { stderr: /must resolve to the same directory/ },
+  );
+});
+
+test('reports missing results instead of writing an empty success Summary', async (t) => {
+  const f = await fixture(t);
+  await assert.rejects(writeSummary(f), {
+    stderr: /No Midscene Test result.md found/,
+  });
 });
