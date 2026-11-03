@@ -10,7 +10,10 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 
-const RESULTS_DIRECTORY = path.join('.midscene', 'test-results');
+const RESULTS_DIRECTORIES = [
+  path.join('midscene_run', 'test-results'),
+  path.join('.midscene', 'test-results'),
+];
 const REPORT_DIRECTORY = path.join('midscene_run', 'report');
 const SUMMARY_FILENAME = 'summary.json';
 const REPORT_ENTRY_FILENAME = 'index.html';
@@ -23,21 +26,23 @@ const COMPATIBILITY_DATE = '2026-10-14';
  * @returns {Promise<string>} Absolute report directory.
  */
 async function resolveReportDirectory(projectDirectory) {
-  const results = path.join(projectDirectory, RESULTS_DIRECTORY);
-  const entries = await readdir(results, { withFileTypes: true }).catch(
-    (error) => {
-      if (error.code === 'ENOENT') return [];
-      throw error;
-    },
-  );
   const summaries = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const file = path.join(results, entry.name, SUMMARY_FILENAME);
-    try {
-      if ((await stat(file)).isFile()) summaries.push(file);
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
+  for (const resultsDirectory of RESULTS_DIRECTORIES) {
+    const results = path.join(projectDirectory, resultsDirectory);
+    const entries = await readdir(results, { withFileTypes: true }).catch(
+      (error) => {
+        if (error.code === 'ENOENT') return [];
+        throw error;
+      },
+    );
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const file = path.join(results, entry.name, SUMMARY_FILENAME);
+      try {
+        if ((await stat(file)).isFile()) summaries.push(file);
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
     }
   }
   if (summaries.length !== 1) {

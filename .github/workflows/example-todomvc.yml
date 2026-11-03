@@ -66,7 +66,7 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          summaries=(.midscene/test-results/*/summary.json)
+          summaries=(midscene_run/test-results/*/summary.json .midscene/test-results/*/summary.json)
           [[ ${#summaries[@]} == 1 ]]
           report=$(jq -er '.report | select(type == "string" and length > 0)' "${summaries[0]}")
           test -s "$(dirname "${summaries[0]}")/$report"

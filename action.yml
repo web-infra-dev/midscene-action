@@ -97,7 +97,7 @@ runs:
         TEST_DIRECTORY: ${{ inputs.working-directory }}
       run: |
         {
-          for result in "$TEST_DIRECTORY"/.midscene/test-results/*/result.md; do
+          for result in "$TEST_DIRECTORY"/midscene_run/test-results/*/result.md "$TEST_DIRECTORY"/.midscene/test-results/*/result.md; do
             [ -f "$result" ] || continue
             sed '/^\[Open the Midscene Test report ↗\](/d' "$result"
             echo
