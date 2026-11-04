@@ -21,8 +21,8 @@ and [TodoMVC](examples/todomvc/README.md) examples with model credentials.
 
 - Resolve the artifact root once through `src/artifacts.mjs`. Pass its absolute
   path to the command as `MIDSCENE_RUN_DIR`; upload, Summary, and publication
-  consume the same resolved step outputs. Reject conflicting input and environment
-  settings. A custom root must not collect stale default-root results; the default
+  consume the same resolved step outputs. An unset or empty `MIDSCENE_RUN_DIR`
+  uses the default. A custom root must not collect stale default-root results; the default
   also collects legacy `.midscene` results.
 - Locate results through `test-results/` and the generated Summary. Missing Test
   results must fail with a directory configuration hint, rather than produce an
@@ -33,7 +33,7 @@ and [TodoMVC](examples/todomvc/README.md) examples with model credentials.
   Validate report paths and assets against the allowed report root, including
   real paths through symlinks. Do not publish the whole working directory.
 - Cover both report formats, default and custom roots, inherited environment,
-  conflicts, missing results, multiple runs, and path escapes in `pnpm check`.
+  empty environment values, missing results, multiple runs, and path escapes in `pnpm check`.
   Runtime artifact conventions are maintained in Midscene's
   [contribution guide](https://github.com/web-infra-dev/midscene/blob/main/CONTRIBUTING.md).
 

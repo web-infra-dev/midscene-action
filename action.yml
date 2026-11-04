@@ -10,8 +10,6 @@ inputs:
   command:
     description: Command to run the installed Midscene test suite.
     default: npx midscene-test
-  run-directory:
-    description: Artifact root relative to working-directory, or an absolute path. Passed to the test command as MIDSCENE_RUN_DIR. Defaults to MIDSCENE_RUN_DIR or midscene_run.
   artifact-name:
     description: Report artifact name; use unique names in a matrix.
     default: midscene-results
@@ -74,8 +72,6 @@ runs:
       id: artifacts
       shell: bash
       working-directory: ${{ inputs.working-directory }}
-      env:
-        MIDSCENE_ACTION_RUN_DIR: ${{ inputs.run-directory }}
       run: node "$GITHUB_ACTION_PATH/src/artifacts.mjs" paths
 
     - name: Run all Midscene cases
