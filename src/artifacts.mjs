@@ -79,10 +79,16 @@ async function run() {
   const files = await resultFiles(roots, 'result.md');
   const results = await Promise.all(
     files.map(async (file) =>
-      (await readFile(file, 'utf8')).replace(
-        /^\[Open the Midscene Test report ↗\]\([^\r\n]*\)\r?\n?/gm,
-        '',
-      ),
+      (await readFile(file, 'utf8'))
+        .replace(/^## Midscene Test(?:\r?\n|$)/, '')
+        .replace(
+          /^!\[Midscene Test: .*\]\(https:\/\/badge\.midscenejs\.com\/e2e\?[^\r\n]*(?:\r?\n|$)/gm,
+          '',
+        )
+        .replace(
+          /^\[Open the Midscene Test report ↗\]\([^\r\n]*\)\r?\n?/gm,
+          '',
+        ),
     ),
   );
   const download = `[Download test artifacts](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}#artifacts)`;

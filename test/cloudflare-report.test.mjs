@@ -159,6 +159,28 @@ for (const resultsRoot of resultsRoots) {
   });
 }
 
+test('filters duplicate headings and badges while preserving failed test details and the source', async (t) => {
+  const f = await fixture(t);
+  const result = await writeResult(f, 'midscene_run');
+  const badge =
+    '![Midscene Test: failed](https://badge.midscenejs.com/e2e?status=failed)';
+  const details =
+    'Passed: 1, Failed: 1\n- greeting: passed\n- todo: failed\n## Failure details\nExpected completed todo\n';
+  const original = `## Midscene Test\n${badge}\n${details}[Open the Midscene Test report ↗](old-url)\n`;
+  const file = path.join(result, 'result.md');
+  await writeFile(file, original);
+  await writeFile(
+    path.join(f.root, 'github-summary'),
+    `## Midscene Test\n${badge}\n`,
+  );
+  const content = await writeSummary(f);
+  assert.equal(content.match(/^## Midscene Test$/gm)?.length, 1);
+  assert.equal(content.match(/^!\[Midscene Test:/gm)?.length, 1);
+  assert.ok(content.includes(details));
+  assert.doesNotMatch(content, /old-url/);
+  assert.equal(await readFile(file, 'utf8'), original);
+});
+
 test('rejects missing results', async (t) => {
   const f = await fixture(t);
   await assert.rejects(publish(f), {

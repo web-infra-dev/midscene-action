@@ -19,7 +19,8 @@ Run [Midscene Test](https://midscenejs.com/midscene-test/overview.html) tests in
 ## Examples
 
 - [Basic](.github/workflows/example-basic.yml): submit a greeting form with AI and check the result.
-- [TodoMVC](.github/workflows/example-todomvc.yml): manage todos with AI and verify the results with custom Nodes.
+- [TodoMVC](.github/workflows/example-todomvc.yml): manage todos with AI using a custom `MIDSCENE_RUN_DIR`.
+- [External assets](examples/external-assets/): generate an `html-and-external-assets` report with a model-free test.
 
 ## Usage
 

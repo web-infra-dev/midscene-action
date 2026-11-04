@@ -11,3 +11,5 @@ coverage/
 .midscene/
 midscene_run/
 midscene-node-spec*.md
+
+examples/todomvc/artifacts/
