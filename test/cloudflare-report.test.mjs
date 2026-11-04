@@ -181,6 +181,29 @@ test('filters duplicate headings and badges while preserving failed test details
   assert.equal(await readFile(file, 'utf8'), original);
 });
 
+for (const statistics of [
+  '✅ **2/2 passed** · 3s',
+  '❌ **1 failed** · 1 passed · 0 not run · 1m 2s',
+]) {
+  test(`omits duplicate statistics: ${statistics}`, async (t) => {
+    const f = await fixture(t);
+    const result = await writeResult(f, 'midscene_run');
+    const details =
+      '**Filtered:** 2\n**Infrastructure:** 1 project failures\n- ✅ greeting\n- ❌ todo\n## Failure details\nExpected completed todo\n';
+    const original = `## Midscene Test\n\n${statistics}\n\n${details}`;
+    const file = path.join(result, 'result.md');
+    await writeFile(file, original);
+    const cliSummary =
+      '## Midscene Test\n| Passed | Failed | Duration |\n| 1 | 1 | 1m 2s |\n';
+    await writeFile(path.join(f.root, 'github-summary'), cliSummary);
+    const content = await writeSummary(f);
+    assert.ok(content.startsWith(cliSummary));
+    assert.ok(content.includes(details));
+    assert.ok(!content.includes(statistics));
+    assert.equal(await readFile(file, 'utf8'), original);
+  });
+}
+
 test('rejects missing results', async (t) => {
   const f = await fixture(t);
   await assert.rejects(publish(f), {

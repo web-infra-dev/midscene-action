@@ -86,6 +86,10 @@ async function run() {
           '',
         )
         .replace(
+          /^(?:✅ \*\*\d+\/\d+ passed\*\*|❌ \*\*\d+ failed\*\* · \d+ passed · \d+ not run) · (?:\d+m )?\d+s(?:\r?\n|$)/gm,
+          '',
+        )
+        .replace(
           /^\[Open the Midscene Test report ↗\]\([^\r\n]*\)\r?\n?/gm,
           '',
         ),
