@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs';
-import path from 'node:path';
 import { loadEnvFile } from 'node:process';
 import { defineProjectSetup, defineTestProject } from '@midscene/test/config';
 import { createMidsceneNodes } from '@midscene/test/midscene';
@@ -32,12 +31,6 @@ const setup = defineProjectSetup<Context>({
 });
 
 export default defineTestProject<Context>({
-  output: {
-    reportDir: path.join(
-      process.env.MIDSCENE_RUN_DIR || 'midscene_run',
-      'report',
-    ),
-  },
   projects: [
     {
       name: 'deterministic',

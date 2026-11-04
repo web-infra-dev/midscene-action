@@ -33,8 +33,7 @@ Inspect the available Nodes or run just the deterministic case without a model:
 
 ```bash
 npm run nodes
-export MIDSCENE_RUN_DIR=artifacts
-npm run test:deterministic -- --result-dir "$MIDSCENE_RUN_DIR/test-results"
+npm run test:deterministic
 ```
 
 To run the AI case, copy `.env.example` to `.env` and fill in your model API key,
@@ -44,7 +43,7 @@ Set the optional base URL if your provider requires it. Shell variables take
 precedence over `.env`.
 
 ```bash
-npm test -- --result-dir "$MIDSCENE_RUN_DIR/test-results"
+npm test
 ```
 
 `npm test` runs both projects. `npm run test:ai` runs just the AI project.
@@ -55,15 +54,8 @@ The reusable Nodes are in [`nodes/todo.ts`](nodes/todo.ts):
 Zod schemas, and their structured results appear in the native report.
 The workflow is in [`cases/todo.yaml`](cases/todo.yaml).
 
-This example’s CI sets `MIDSCENE_RUN_DIR=artifacts` to demonstrate a custom
-artifact root relative to `examples/todomvc`. Use the same environment variable
-locally to write HTML reports under `artifacts/report/` and structured results
-under `artifacts/test-results/<run-id>/`. The report format uses the default
-`single-html`. With `@midscene/test` 1.17.5, `output.reportDir` in the config
-reads this environment variable, and the CI command passes
-`--result-dir "$MIDSCENE_RUN_DIR/test-results"` to place structured results
-under the same root. For a full local run with the custom root, use
-`npm test -- --result-dir "$MIDSCENE_RUN_DIR/test-results"` after exporting it.
+Midscene writes the HTML report under `midscene_run/report/` and structured
+results and `result.md` under `.midscene/test-results/<run-id>/`.
 Use a clean output directory for each Action run: report publication expects
 exactly one native run summary.
 

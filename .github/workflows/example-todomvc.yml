@@ -23,7 +23,6 @@ jobs:
       url: ${{ steps.test.outputs.page-url }}
 
     env:
-      MIDSCENE_RUN_DIR: artifacts
       MIDSCENE_MODEL_API_KEY: ${{ secrets.MIDSCENE_MODEL_API_KEY }}
       MIDSCENE_MODEL_NAME: ${{ vars.MIDSCENE_MODEL_NAME || secrets.MIDSCENE_MODEL_NAME }}
       MIDSCENE_MODEL_BASE_URL: ${{ vars.MIDSCENE_MODEL_BASE_URL || secrets.MIDSCENE_MODEL_BASE_URL }}
@@ -56,7 +55,7 @@ jobs:
           NODE_OPTIONS: ${{ steps.ai-ci.outputs.node-options }}
         with:
           working-directory: examples/todomvc
-          command: npm test -- --result-dir "$MIDSCENE_RUN_DIR/test-results"
+          command: npm test
           publish-pages: true
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
@@ -73,7 +72,7 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          summaries=(test-results/*/summary.json)
+          summaries=(midscene_run/test-results/*/summary.json .midscene/test-results/*/summary.json)
           [[ ${#summaries[@]} == 1 ]]
           report=$(jq -er '.report | select(type == "string" and length > 0)' "${summaries[0]}")
           test -s "$(dirname "${summaries[0]}")/$report"

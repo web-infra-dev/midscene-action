@@ -23,5 +23,4 @@ project through the Action, downloads its artifact and verifies the report entry
 On same-repository runs it also publishes the report using the shared `CI`
 environment’s Cloudflare credentials. Fork PRs run the example without publication.
 
-The [basic example](../basic/) covers the default single-HTML format. The
-[TodoMVC example](../todomvc/) demonstrates a custom `MIDSCENE_RUN_DIR`.
+The [basic example](../basic/) covers the default single-HTML format.

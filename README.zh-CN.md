@@ -19,7 +19,7 @@
 ## 示例
 
 - [Basic](.github/workflows/example-basic.yml)：使用 AI 提交问候表单并检查结果。
-- [TodoMVC](.github/workflows/example-todomvc.yml)：使用 AI 管理待办事项，并演示自定义 `MIDSCENE_RUN_DIR`。
+- [TodoMVC](.github/workflows/example-todomvc.yml)：使用 AI 管理待办事项，并通过自定义 Node 验证结果。
 - [外置资源报告](examples/external-assets/)：通过无需模型的简单测试生成 `html-and-external-assets` 报告。
 
 ## 使用方法
