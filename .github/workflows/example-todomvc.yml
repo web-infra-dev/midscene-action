@@ -46,9 +46,15 @@ jobs:
           npm run typecheck
           npx playwright install --with-deps chromium
 
+      - name: Prepare AI CI
+        id: ai-ci
+        uses: web-infra-dev/midscene/.github/actions/ai-ci@a9d6f208dd3adb35ec281b452e31c96704adc116 # main
+
       - name: Run real Midscene tests with this Action
         uses: ./
         id: test
+        env:
+          NODE_OPTIONS: ${{ steps.ai-ci.outputs.node-options }}
         with:
           working-directory: examples/todomvc
           command: npm test
@@ -68,7 +74,7 @@ jobs:
         shell: bash
         run: |
           shopt -s nullglob
-          summaries=(.midscene/test-results/*/summary.json)
+          summaries=(midscene_run/test-results/*/summary.json .midscene/test-results/*/summary.json)
           [[ ${#summaries[@]} == 1 ]]
           report=$(jq -er '.report | select(type == "string" and length > 0)' "${summaries[0]}")
           test -s "$(dirname "${summaries[0]}")/$report"

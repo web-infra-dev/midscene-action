@@ -10,7 +10,8 @@
   "scripts": {
     "lint": "rslint . --max-warnings=0 && prettier --check .",
     "format": "rslint . --fix --max-warnings=0 && prettier --write .",
-    "check": "pnpm lint",
+    "test": "node --test",
+    "check": "pnpm lint && pnpm test",
     "prepare": "husky"
   },
   "packageManager": "pnpm@10.29.2",
