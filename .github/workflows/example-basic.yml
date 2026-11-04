@@ -23,6 +23,8 @@ jobs:
       url: ${{ steps.test.outputs.page-url }}
 
     env:
+      # Allow slower model endpoint connections before trying another address.
+      NODE_OPTIONS: --network-family-autoselection-attempt-timeout=2000
       MIDSCENE_MODEL_API_KEY: ${{ secrets.MIDSCENE_MODEL_API_KEY }}
       MIDSCENE_MODEL_NAME: ${{ vars.MIDSCENE_MODEL_NAME || secrets.MIDSCENE_MODEL_NAME }}
       MIDSCENE_MODEL_BASE_URL: ${{ vars.MIDSCENE_MODEL_BASE_URL || secrets.MIDSCENE_MODEL_BASE_URL }}
