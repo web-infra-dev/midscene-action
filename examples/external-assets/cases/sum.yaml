@@ -1,0 +1,7 @@
+cases:
+  - name: Add two numbers
+    steps:
+      - expectSum:
+          left: 2
+          right: 3
+          expected: 5

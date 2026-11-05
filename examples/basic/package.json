@@ -8,8 +8,8 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@midscene/test": "1.15.3",
-    "@midscene/web": "1.15.3",
+    "@midscene/test": "1.17.5",
+    "@midscene/web": "1.17.5",
     "@types/node": "24.19.2",
     "playwright": "1.64.0",
     "typescript": "5.9.3"

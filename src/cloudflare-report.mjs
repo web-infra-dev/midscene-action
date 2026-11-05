@@ -20,11 +20,10 @@ const COMPATIBILITY_DATE = '2026-10-14';
 
 /**
  * Find and validate the selected HTML report and any owned asset directory.
- * @param {string} projectDirectory - Midscene test project directory.
  * @returns {Promise<{report: string, directory?: string}>} Report entry and optional asset directory.
  */
-async function resolveReportDirectory(projectDirectory) {
-  const roots = artifactRoots(projectDirectory);
+async function resolveReportDirectory() {
+  const roots = artifactRoots();
   const summaries = await resultFiles(roots, SUMMARY_FILENAME);
   if (summaries.length !== 1) {
     throw new Error(
@@ -90,7 +89,7 @@ async function resolveReportDirectory(projectDirectory) {
 
 /** Write Wrangler configuration and expose its directory to the Action. */
 async function prepare() {
-  const source = await resolveReportDirectory(process.cwd());
+  const source = await resolveReportDirectory();
   const directory = await mkdtemp(
     path.join(process.env.RUNNER_TEMP, 'midscene-report.'),
   );
