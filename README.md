@@ -15,7 +15,6 @@ Run [Midscene Test](https://midscenejs.com/midscene-test/overview.html) tests in
 - Test results in the workflow summary.
 - HTML reports and test data uploaded as artifacts.
 - Optional report hosting on Cloudflare Workers, with a URL for each run.
-- Cloudflare Pages publication for existing Pages projects using `cloudflare-target: pages` and `cloudflare-pages-project`.
 - [SIWC session preparation and parallel execution](docs/siwc.md), with one refresh owner and access-only test jobs.
 
 ## Examples

@@ -1,5 +1,5 @@
 name: Midscene Action
-description: Run Midscene tests in GitHub Actions and publish native reports to Cloudflare Workers or Pages.
+description: Run Midscene tests in GitHub Actions and publish native reports to Cloudflare Workers.
 branding:
   icon: activity
   color: white
@@ -21,11 +21,6 @@ inputs:
   publish-pages:
     description: Set true to deploy the native report to Cloudflare after testing.
     default: 'false'
-  cloudflare-target:
-    description: Deployment target, workers (default) or pages.
-    default: workers
-  cloudflare-pages-project:
-    description: Existing Cloudflare Pages project name. Required for the pages target.
   cloudflare-api-token:
     description: Cloudflare API token. Workers Admin is needed to create a Worker; Editor can target an existing Worker. Required when publishing.
   cloudflare-account-id:
@@ -45,10 +40,10 @@ outputs:
     value: ${{ steps.test.outcome }}
   page-url:
     description: URL of this run's Cloudflare report, or empty when deployment did not succeed.
-    value: ${{ steps.deployment.outputs.preview-deployment-url || steps.pages.outputs.deployment-url }}
+    value: ${{ steps.deployment.outputs.preview-deployment-url }}
   publication-result:
     description: Deployment step outcome (success, failure, skipped, or cancelled).
-    value: ${{ inputs.cloudflare-target == 'pages' && steps.pages.outcome || steps.deployment.outcome }}
+    value: ${{ steps.deployment.outcome }}
 runs:
   using: composite
   steps:
@@ -61,8 +56,6 @@ runs:
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
         CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
         CLOUDFLARE_WORKER_NAME: ${{ inputs.cloudflare-worker-name }}
-        CLOUDFLARE_TARGET: ${{ inputs.cloudflare-target }}
-        CLOUDFLARE_PAGES_PROJECT: ${{ inputs.cloudflare-pages-project }}
       run: |
         if [[ -z "$TEST_DIRECTORY" ]]; then
           echo 'working-directory is required' >&2
@@ -70,14 +63,6 @@ runs:
         fi
         if [[ "$PUBLISH_PAGES" != true && "$PUBLISH_PAGES" != false ]]; then
           echo 'publish-pages must be true or false' >&2
-          exit 1
-        fi
-        if [[ "$CLOUDFLARE_TARGET" != workers && "$CLOUDFLARE_TARGET" != pages ]]; then
-          echo '::error::cloudflare-target must be workers or pages.'
-          exit 1
-        fi
-        if [[ "$PUBLISH_PAGES" == true && "$CLOUDFLARE_TARGET" == pages && ! "$CLOUDFLARE_PAGES_PROJECT" =~ ^[a-z0-9][a-z0-9-]{0,57}[a-z0-9]$ ]]; then
-          echo '::error::Set cloudflare-pages-project to an existing Pages project name.'
           exit 1
         fi
         if [[ "$PUBLISH_PAGES" == true && ( -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" || -z "$CLOUDFLARE_WORKER_NAME" ) ]]; then
@@ -135,7 +120,7 @@ runs:
 
     - name: Deploy report to Cloudflare Workers
       id: deployment
-      if: ${{ !cancelled() && steps.report.outcome == 'success' && inputs.cloudflare-target == 'workers' }}
+      if: ${{ !cancelled() && steps.report.outcome == 'success' }}
       uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
       with:
         apiToken: ${{ inputs.cloudflare-api-token }}
@@ -145,23 +130,11 @@ runs:
         workingDirectory: ${{ steps.report.outputs.directory }}
         command: preview --name run-${{ github.run_id }}-${{ github.run_attempt }}
 
-    - name: Deploy report to Cloudflare Pages
-      id: pages
-      if: ${{ !cancelled() && steps.report.outcome == 'success' && inputs.cloudflare-target == 'pages' }}
-      uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
-      with:
-        apiToken: ${{ inputs.cloudflare-api-token }}
-        accountId: ${{ inputs.cloudflare-account-id }}
-        wranglerVersion: '4.151.1'
-        packageManager: npm
-        workingDirectory: ${{ steps.report.outputs.directory }}
-        command: pages deploy "${{ steps.report.outputs.assets }}" --project-name=${{ inputs.cloudflare-pages-project }} --branch=run-${{ github.run_id }}-${{ github.run_attempt }} --commit-hash=${{ github.sha }}
-
     - name: Verify published report URL and write Summary
-      if: ${{ steps.deployment.outcome == 'success' || steps.pages.outcome == 'success' }}
+      if: ${{ steps.deployment.outcome == 'success' }}
       shell: bash
       env:
-        PAGE_URL: ${{ steps.deployment.outputs.preview-deployment-url || steps.pages.outputs.deployment-url }}
+        PAGE_URL: ${{ steps.deployment.outputs.preview-deployment-url }}
       run: |
         if [[ -z "$PAGE_URL" ]]; then
           echo '::error::Cloudflare uploaded the report but returned no deployment URL. Open Workers & Pages > your Worker > Domains > Worker URL and enable Preview, then rerun the workflow.'

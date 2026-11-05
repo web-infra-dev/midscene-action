@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-test('publication resolves the exact native report assets for Pages and Workers', async () => {
+test('publication resolves the exact native report assets for Workers', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'midscene-publication-'));
   try {
     const project = path.join(root, 'project');
@@ -51,13 +51,12 @@ test('publication resolves the exact native report assets for Pages and Workers'
         .split('\n')
         .map((line) => line.split('=')),
     );
-    assert.equal(entries.assets, await realpath(report));
     const config = JSON.parse(
       await readFile(path.join(entries.directory, 'wrangler.json'), 'utf8'),
     );
     assert.equal(config.assets.directory, await realpath(report));
     assert.equal(
-      await readFile(path.join(entries.assets, 'index.html'), 'utf8'),
+      await readFile(path.join(config.assets.directory, 'index.html'), 'utf8'),
       'native-report',
     );
   } finally {

@@ -64,7 +64,7 @@ Rerun the whole workflow after expiration; a single old shard cannot renew it.
 ## Reports and verification
 
 Merge shard reports into one native report and one native result summary, then run
-the root Action once with your merge command. For an existing Pages project:
+the root Action once with your merge command. To publish to Cloudflare Workers:
 
 ```yaml
 - uses: web-infra-dev/midscene-action@main
@@ -73,15 +73,14 @@ the root Action once with your merge command. For an existing Pages project:
     working-directory: tests/midscene
     command: node scripts/merge-reports.mjs
     publish-pages: 'true'
-    cloudflare-target: pages
-    cloudflare-pages-project: my-midscene-reports
+    cloudflare-worker-name: my-midscene-reports
     cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     cloudflare-account-id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
 ```
 
-Pages requires access to the selected Pages project; the existing Workers target
-requires Workers permissions. Publication verifies that the deployed URL serves a
-native Midscene report and appends its URL to Summary. `page-url` exposes that URL.
+The token requires Workers permissions, as described in the root README.
+Publication verifies that the deployed URL serves a native Midscene report and
+appends its URL to Summary. `page-url` exposes that URL.
 Publishing failed test reports does not change the test verdict.
 
 Test a forced refresh, a subsequent reuse run, multiple parallel consumers, expired
