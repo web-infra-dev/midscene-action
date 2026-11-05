@@ -152,6 +152,8 @@ To save results under `artifacts/`, set the environment variable:
     MIDSCENE_RUN_DIR: artifacts
 ```
 
+With `@midscene/test` 1.17.5, Test results and aggregate HTML reports still use separate path settings. For the custom root above, also set `output.reportDir: 'artifacts/report'` in `midscene.config.ts` and pass `--result-dir "$MIDSCENE_RUN_DIR/test-results"` to the test command. The Action collects only the selected custom root, so outputs left in the default directories will be missed. Using only `MIDSCENE_RUN_DIR` for all Test outputs requires upgrading to a release that includes [upstream PR #3338](https://github.com/web-infra-dev/midscene/pull/3338).
+
 Cloudflare publication supports both single HTML and external-asset reports. Publishing requires exactly one Test run in the selected results directory. If the command does not produce Midscene Test results, the Summary step reports an error with a configuration hint.
 
 ![Test results, report download, and online report links in the Summary](assets/test-summary.png)

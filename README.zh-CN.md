@@ -152,6 +152,8 @@ jobs:
     MIDSCENE_RUN_DIR: artifacts
 ```
 
+`@midscene/test` 1.17.5 的测试结果和汇总 HTML 报告仍使用独立的路径配置。使用上面的自定义根目录时，还需在 `midscene.config.ts` 中设置 `output.reportDir: 'artifacts/report'`，并向测试命令传入 `--result-dir "$MIDSCENE_RUN_DIR/test-results"`。Action 只收集选定的自定义根目录，仍写入默认目录的产物会被遗漏。仅通过 `MIDSCENE_RUN_DIR` 统一所有 Test 产物，需要升级到包含[上游 PR #3338](https://github.com/web-infra-dev/midscene/pull/3338) 的发布版本。
+
 Cloudflare 发布支持单 HTML 和外置资源报告。所选结果目录中需恰好有一轮 Test 运行。测试命令未产出 Midscene Test 结果时，Summary 步骤会报错并提示检查配置。
 
 ![Summary 中的测试结果、报告下载和在线报告入口](assets/test-summary.png)
