@@ -15,10 +15,11 @@ The root report Action remains responsible for artifacts, Summary and publicatio
    read and write**. Store it as repository secret `SIWC_SECRET_WRITE_TOKEN`.
 4. Generate 32 random bytes encoded as 64 hex characters and store them in repository
    secret `SIWC_TRANSPORT_KEY`. All consumers need the same key.
-5. Install `@midscene/core` in the caller project. The SDK must export `@midscene/core/siwc` with `refreshSiwcCredentials`.
-   This entry is pending a Core release; existing Core 1.17.4/1.17.5 builds are incompatible. Until the
-   first supporting version is released, use a build from [Core PR #3349](https://github.com/web-infra-dev/midscene/pull/3349).
-   Pin that build in your lockfile; the Action never installs a newer SDK. `gh` must be installed on the credential runner.
+5. Install `@midscene/core@1.17.6` or newer in the caller project. Version 1.17.6
+   is the first stable release exposing `@midscene/core/siwc` with
+   `refreshSiwcCredentials`. Keep the version pinned in your lockfile; the Action
+   resolves the caller's SDK and never installs a newer version. `gh` must be
+   installed on the credential runner.
 
 See [the workflow template](../examples/siwc.yml). Pin the prepare, run and root
 Actions to the same reviewed commit or release when adopting them. These paths
