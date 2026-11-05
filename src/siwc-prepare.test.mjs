@@ -22,7 +22,7 @@ test('prepare resolves the caller SDK and persists to the selected Environment b
     writeFileSync(join(root, 'package.json'), '{}');
     writeFileSync(
       join(core, 'package.json'),
-      JSON.stringify({ exports: { './ai-model': './model.cjs' } }),
+      JSON.stringify({ exports: { './siwc': './model.cjs' } }),
     );
     writeFileSync(
       join(core, 'model.cjs'),
@@ -87,3 +87,88 @@ const fs=require('node:fs');fs.writeFileSync(process.env.OWNER_CAPTURE, JSON.str
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+for (const scenario of [
+  {
+    name: 'missing SDK entry',
+    exports: {},
+    expected: /SDK SIWC entry; code=ERR_PACKAGE_PATH_NOT_EXPORTED/,
+  },
+  {
+    name: 'missing SDK method',
+    source: 'module.exports = {}',
+    expected: /SDK SIWC entry;.*Install a Core build/,
+  },
+  {
+    name: 'malformed credentials',
+    credentials: '{fixture-sensitive-json',
+    expected: /credential JSON; code=INVALID_JSON/,
+  },
+  {
+    name: 'refresh timeout',
+    source: `exports.refreshSiwcCredentials=async()=>{throw Object.assign(new Error('fixture-sensitive-body'),{name:'TimeoutError'})}`,
+    expected: /OpenAI refresh; code=TIMEOUT/,
+  },
+  {
+    name: 'refresh HTTP rejection',
+    source: `exports.refreshSiwcCredentials=async()=>{throw Object.assign(new Error('HTTP status: 401\\nResponse body: fixture-sensitive-body'),{name:'SiwcError'})}`,
+    expected: /OpenAI refresh; code=UNCLASSIFIED; http=401/,
+  },
+]) {
+  test(`prepare distinguishes ${scenario.name} without leaking raw diagnostics or releasing a ticket`, () => {
+    const root = mkdtempSync(join(tmpdir(), 'siwc-errors-'));
+    try {
+      const core = join(root, 'node_modules/@midscene/core');
+      mkdirSync(core, { recursive: true });
+      writeFileSync(join(root, 'package.json'), '{}');
+      writeFileSync(
+        join(core, 'package.json'),
+        JSON.stringify({
+          exports: scenario.exports ?? { './siwc': './model.cjs' },
+        }),
+      );
+      writeFileSync(
+        join(core, 'model.cjs'),
+        scenario.source ?? 'module.exports = {}',
+      );
+      const output = join(root, 'output');
+      const result = spawnSync(
+        process.execPath,
+        [resolve('src/siwc/prepare.mjs')],
+        {
+          env: {
+            ...process.env,
+            SIWC_PROJECT_DIRECTORY: root,
+            SIWC_ENVIRONMENT: 'owner',
+            SIWC_SECRET_NAME: 'SESSION',
+            GH_TOKEN: 'fixture-gh',
+            GITHUB_OUTPUT: output,
+            SIWC_TRANSPORT_KEY: 'ab'.repeat(32),
+            GITHUB_REPOSITORY: 'example/project',
+            GITHUB_RUN_ID: '42',
+            SIWC_CREDENTIALS:
+              scenario.credentials ??
+              JSON.stringify({
+                credentials: {
+                  access_token: 'fixture-access',
+                  refresh_token: 'fixture-refresh',
+                  expires_at: 0,
+                },
+              }),
+          },
+          encoding: 'utf8',
+        },
+      );
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, scenario.expected);
+      assert.doesNotMatch(
+        result.stderr,
+        /fixture-sensitive|fixture-access|fixture-refresh|fixture-gh|Response body|model.cjs/,
+      );
+      assert.equal(result.stdout.includes('ticket='), false);
+      assert.throws(() => readFileSync(output), { code: 'ENOENT' });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}

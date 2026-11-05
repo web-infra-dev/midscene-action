@@ -24,7 +24,7 @@ inputs:
     default: 'false'
 outputs:
   ticket:
-    description: Encrypted access-only ticket bound to this repository, run and attempt.
+    description: Encrypted access-only ticket bound to this repository and workflow run.
     value: ${{ steps.prepare.outputs.ticket }}
 runs:
   using: composite

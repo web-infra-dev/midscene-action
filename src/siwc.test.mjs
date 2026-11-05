@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -194,38 +201,48 @@ test('rotation is persisted even if the server gives a lease too short for the s
   assert.equal(stored.credentials.refresh_token, 'rotated');
 });
 
-test('tampering, another repository/run/attempt/key and delayed shard admission fail closed', () => {
+test('same-run attempts reuse valid tickets; other repositories/runs, tampering and expiration fail closed', () => {
   const ticket = seal(accessLease(credentials, now), key, context);
   for (const changed of [
     { ...env, GITHUB_REPOSITORY: 'another/repo' },
     { ...env, GITHUB_RUN_ID: '124' },
-    { ...env, GITHUB_RUN_ATTEMPT: '2' },
   ])
     assert.throws(
       () => unseal(ticket, key, binding(changed), now),
-      /Invalid or expired/,
+      /Invalid SIWC/,
     );
   assert.throws(
     () => unseal(ticket, 'cd'.repeat(32), context, now),
-    /Invalid or expired/,
+    /Invalid SIWC/,
   );
   const bytes = Buffer.from(ticket, 'base64url');
   bytes[30] ^= 1;
   assert.throws(
     () => unseal(bytes.toString('base64url'), key, context, now),
-    /Invalid or expired/,
+    /Invalid SIWC/,
   );
   assert.throws(
     () => unseal(ticket, key, context, now + 39 * 60_000),
-    /Invalid or expired/,
+    /insufficient lifetime.*entire workflow/,
+  );
+  assert.deepEqual(
+    unseal(ticket, key, binding({ ...env, GITHUB_RUN_ATTEMPT: '2' }), now),
+    accessLease(credentials, now),
+  );
+  assert.equal(
+    binding({
+      GITHUB_REPOSITORY: env.GITHUB_REPOSITORY,
+      GITHUB_RUN_ID: env.GITHUB_RUN_ID,
+    }),
+    context,
   );
   assert.throws(
     () => unseal(seal(credentials, key, context), key, context, now),
-    /Invalid or expired/,
+    /Invalid SIWC/,
   );
 });
 
-test('four real child processes have isolated homes, no refresh/write secrets and remove their access files', async () => {
+test('four separate runner homes retain configuration and caches while access files are removed', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'tapilot-siwc-test-'));
   const lease = {
     access_token: 'fixture-shard-access',
@@ -237,6 +254,9 @@ test('four real child processes have isolated homes, no refresh/write secrets an
     const file = process.env.HOME + '/.midscene/siwc.json';
     const record = JSON.parse(fs.readFileSync(file, 'utf8'));
     assert.deepEqual(Object.keys(record.credentials).sort(), ['access_token','expires_at']);
+    assert.equal(process.env.HOME, process.env.EXPECTED_HOME);
+    assert.equal(fs.readFileSync(process.env.HOME + '/.config/fixture', 'utf8'), 'existing-config');
+    assert.equal(fs.readFileSync(process.env.HOME + '/.cache/ms-playwright/fixture', 'utf8'), 'installed-browser');
     assert.equal(process.env.MIDSCENE_MODEL_AUTH_MODE, 'siwc');
     assert.equal(record.credentials.access_token, process.env.MIDSCENE_SIWC_ACCESS_TOKEN);
     for (const name of ['SIWC_TICKET','SIWC_TRANSPORT_KEY','SIWC_CREDENTIALS','GH_TOKEN','MIDSCENE_MODEL_API_KEY'])
@@ -250,6 +270,14 @@ test('four real child processes have isolated homes, no refresh/write secrets an
         { length: 4 },
         (_, lane) =>
           new Promise((resolve, reject) => {
+            const home = join(directory, `home-${lane}`);
+            mkdirSync(join(home, '.config'), { recursive: true });
+            mkdirSync(join(home, '.cache/ms-playwright'), { recursive: true });
+            writeFileSync(join(home, '.config/fixture'), 'existing-config');
+            writeFileSync(
+              join(home, '.cache/ms-playwright/fixture'),
+              'installed-browser',
+            );
             const output = join(directory, String(lane));
             const child = spawn(
               process.execPath,
@@ -258,6 +286,8 @@ test('four real child processes have isolated homes, no refresh/write secrets an
                 env: {
                   ...process.env,
                   ...env,
+                  HOME: home,
+                  EXPECTED_HOME: home,
                   SIWC_TICKET: ticket,
                   SIWC_TRANSPORT_KEY: key,
                   SIWC_CREDENTIALS: 'must-not-inherit',
@@ -280,8 +310,177 @@ test('four real child processes have isolated homes, no refresh/write secrets an
       ),
     );
     assert.equal(new Set(results).size, 4);
-    for (const home of results) assert.equal(existsSync(home), false);
+    for (const home of results) {
+      assert.equal(existsSync(home), true);
+      assert.equal(existsSync(join(home, '.midscene/siwc.json')), false);
+      assert.equal(
+        readFileSync(join(home, '.config/fixture'), 'utf8'),
+        'existing-config',
+      );
+    }
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('an existing credential file or symlink is rejected and preserved', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { symlinkSync } = await import('node:fs');
+  const directory = mkdtempSync(join(tmpdir(), 'siwc-existing-'));
+  try {
+    for (const symlink of [false, true]) {
+      const home = join(directory, String(symlink));
+      mkdirSync(join(home, '.midscene'), { recursive: true });
+      const file = join(home, '.midscene/siwc.json');
+      const original = 'caller-owned-credentials';
+      if (symlink) {
+        const target = join(home, 'original');
+        writeFileSync(target, original);
+        symlinkSync(target, file);
+      } else writeFileSync(file, original, { mode: 0o640 });
+      const result = spawnSync(
+        process.execPath,
+        ['src/siwc/run.mjs', process.execPath, '-e', 'process.exit(99)'],
+        {
+          env: {
+            ...process.env,
+            ...env,
+            HOME: home,
+            SIWC_TRANSPORT_KEY: key,
+            SIWC_TICKET: seal(
+              {
+                access_token: 'fixture-access',
+                expires_at: Date.now() + 3600000,
+              },
+              key,
+              context,
+            ),
+          },
+          encoding: 'utf8',
+        },
+      );
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /credential file; code=EEXIST/);
+      assert.equal(readFileSync(file, 'utf8'), original);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('command failure and spawn failure remove only the owned credential file', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const directory = mkdtempSync(join(tmpdir(), 'siwc-failure-'));
+  try {
+    for (const command of [
+      [process.execPath, '-e', 'process.exit(7)'],
+      ['/missing-siwc-command'],
+    ]) {
+      const result = spawnSync(
+        process.execPath,
+        ['src/siwc/run.mjs', ...command],
+        {
+          env: {
+            ...process.env,
+            ...env,
+            HOME: directory,
+            SIWC_TRANSPORT_KEY: key,
+            SIWC_TICKET: seal(
+              {
+                access_token: 'fixture-access',
+                expires_at: Date.now() + 3600000,
+              },
+              key,
+              context,
+            ),
+          },
+          encoding: 'utf8',
+        },
+      );
+      assert.equal(result.status, command.length === 1 ? 1 : 7);
+      assert.equal(existsSync(join(directory, '.midscene/siwc.json')), false);
+      assert.equal(existsSync(directory), true);
+      if (command.length === 1)
+        assert.match(result.stderr, /test command; code=ENOENT/);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test(
+  'SIGTERM stops the shell and its grandchild before credential cleanup',
+  { skip: process.platform === 'win32', timeout: 15000 },
+  async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'siwc-signal-'));
+    const pidFile = join(directory, 'grandchild');
+    let wrapper;
+    let pid;
+    try {
+      const grandchild = join(directory, 'child.cjs');
+      writeFileSync(
+        grandchild,
+        `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(()=>{}, 1000);`,
+      );
+      wrapper = spawn(
+        process.execPath,
+        [
+          'src/siwc/run.mjs',
+          'bash',
+          '-c',
+          '"$1" "$2" & wait',
+          'fixture',
+          process.execPath,
+          grandchild,
+        ],
+        {
+          env: {
+            ...process.env,
+            ...env,
+            HOME: directory,
+            SIWC_TRANSPORT_KEY: key,
+            SIWC_TICKET: seal(
+              {
+                access_token: 'fixture-access',
+                expires_at: Date.now() + 3600000,
+              },
+              key,
+              context,
+            ),
+          },
+          stdio: 'ignore',
+        },
+      );
+      const exited = new Promise((resolve) => wrapper.once('exit', resolve));
+      const deadline = Date.now() + 5000;
+      while (!existsSync(pidFile) && Date.now() < deadline)
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      pid = Number(readFileSync(pidFile, 'utf8'));
+      wrapper.kill('SIGTERM');
+      assert.equal(await exited, 1);
+      assert.equal(existsSync(join(directory, '.midscene/siwc.json')), false);
+      // Give the OS time to reap a terminated descendant.
+      let alive = true;
+      for (let attempt = 0; attempt < 100 && alive; attempt++) {
+        try {
+          process.kill(pid, 0);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        } catch (error) {
+          if (error.code !== 'ESRCH') throw error;
+          alive = false;
+        }
+      }
+      assert.equal(alive, false);
+    } finally {
+      if (wrapper?.exitCode === null) wrapper.kill('SIGKILL');
+      if (pid) {
+        try {
+          process.kill(pid, 'SIGKILL');
+        } catch (error) {
+          assert.equal(error.code, 'ESRCH');
+        }
+      }
+      rmSync(directory, { recursive: true, force: true });
+    }
+  },
+);

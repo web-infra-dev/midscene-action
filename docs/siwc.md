@@ -15,8 +15,10 @@ The root report Action remains responsible for artifacts, Summary and publicatio
    read and write**. Store it as repository secret `SIWC_SECRET_WRITE_TOKEN`.
 4. Generate 32 random bytes encoded as 64 hex characters and store them in repository
    secret `SIWC_TRANSPORT_KEY`. All consumers need the same key.
-5. Install `@midscene/core` in the caller project. The implementation was exercised
-   with Core 1.17.4 and Node 24. `gh` must be installed on the credential runner.
+5. Install `@midscene/core` in the caller project. The SDK must export `@midscene/core/siwc` with `refreshSiwcCredentials`.
+   This entry is pending a Core release; existing Core 1.17.4/1.17.5 builds are incompatible. Until the
+   first supporting version is released, use a build from [Core PR #3349](https://github.com/web-infra-dev/midscene/pull/3349).
+   Pin that build in your lockfile; the Action never installs a newer SDK. `gh` must be installed on the credential runner.
 
 See [the workflow template](../examples/siwc.yml). Pin the prepare, run and root
 Actions to the same reviewed commit or release when adopting them. These paths
@@ -46,20 +48,26 @@ overwrite it with a stale local record.
 ## Consume without refresh
 
 The run Action accepts `working-directory`, `command`, `ticket`, and `transport-key`.
-It runs the command with Bash and pipefail inside a private temporary HOME, writes
-an access-only `~/.midscene/siwc.json` with mode 0600, sets
-`MIDSCENE_MODEL_AUTH_MODE=siwc`, and removes the temporary home on exit.
+It preserves HOME, browser caches and caller configuration, runs with Bash and
+pipefail, and exclusively creates an access-only `~/.midscene/siwc.json` with mode 0600. It sets `MIDSCENE_MODEL_AUTH_MODE=siwc` and removes only that file on exit.
+An existing file or symlink is rejected without modification. Use separate clean
+runner homes for parallel jobs; concurrent consumers sharing HOME are rejected.
+On POSIX cancellation, the command process group is terminated before cleanup.
 
 For an application under test that also needs the session, the child environment
 provides `MIDSCENE_SIWC_ACCESS_TOKEN` and `MIDSCENE_SIWC_EXPIRES_AT` (milliseconds).
 The caller owns any guarded device provisioning. Do not persist those values in
 reports, caches or artifacts. Upload only report and result directories, never HOME.
 
-The ticket uses AES-256-GCM and binds repository, run ID and run attempt. Only
+The ticket uses AES-256-GCM and binds repository and run ID. Only
 `access_token` and `expires_at` are included; refresh, identity and registration
 fields stay with the owner. Shard admission requires 22 minutes remaining; set the
 whole shard job timeout to at most 20 minutes. A delayed/expired ticket fails closed.
-Rerun the whole workflow after expiration; a single old shard cannot renew it.
+A new attempt of the same workflow run can reuse a ticket with sufficient
+remaining validity, including when only failed jobs are rerun. Other repositories
+and run IDs are rejected. Rerun the whole workflow after expiration; a single old
+shard cannot renew it. Tickets issued by the previous attempt-bound Action revision
+are incompatible; rerun the whole workflow once when upgrading.
 
 ## Reports and verification
 
@@ -94,3 +102,10 @@ stage before retrying; an invalid rotating grant may require a fresh local login
 References: [OpenAI sessions](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions),
 [GitHub secret timing](https://docs.github.com/en/actions/reference/security/secrets#when-github-actions-reads-secrets),
 [Environment secret permissions](https://docs.github.com/en/rest/actions/secrets#create-or-update-an-environment-secret).
+
+## CI diagnostics
+
+Failures report a fixed stage, allowlisted system error code or JSON/timeout category,
+and HTTP status when available. Raw SDK/GitHub messages, response bodies, commands,
+paths and stacks are never printed. SDK entry failures give an upgrade instruction;
+writeback failures identify the Environment persistence stage without retrying OAuth.

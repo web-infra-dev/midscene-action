@@ -1,10 +1,18 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {
+  mkdirSync,
+  openSync,
+  writeFileSync,
+  closeSync,
+  unlinkSync,
+} from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { binding, unseal } from './session.mjs';
+import { reportFailure } from './diagnostics.mjs';
 
-let home;
+let ownedFile;
+let stage = 'ticket validation';
 try {
   const lease = unseal(
     process.env.SIWC_TICKET,
@@ -12,18 +20,23 @@ try {
     binding(process.env),
   );
   console.log(`::add-mask::${lease.access_token}`);
+  stage = 'command configuration';
   const [command, ...args] = process.argv.slice(2);
   if (!command) throw new Error('Missing shard command');
-  home = mkdtempSync(join(tmpdir(), 'midscene-siwc-shard-'));
-  mkdirSync(join(home, '.midscene'), { mode: 0o700 });
-  writeFileSync(
-    join(home, '.midscene/siwc.json'),
-    JSON.stringify({ credentials: lease }),
-    { mode: 0o600 },
-  );
+  stage = 'credential file';
+  const directory = join(homedir(), '.midscene');
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const file = join(directory, 'siwc.json');
+  // Exclusive creation rejects existing files/symlinks and shared-HOME races.
+  const fd = openSync(file, 'wx', 0o600);
+  ownedFile = file;
+  try {
+    writeFileSync(fd, JSON.stringify({ credentials: lease }));
+  } finally {
+    closeSync(fd);
+  }
   const env = {
     ...process.env,
-    HOME: home,
     MIDSCENE_MODEL_AUTH_MODE: 'siwc',
     MIDSCENE_SIWC_ACCESS_TOKEN: lease.access_token,
     MIDSCENE_SIWC_EXPIRES_AT: String(lease.expires_at),
@@ -37,8 +50,26 @@ try {
     'MIDSCENE_MODEL_API_KEY',
   ])
     delete env[key];
-  const child = spawn(command, args, { env, stdio: 'inherit' });
-  const forward = (signal) => child.kill(signal);
+  stage = 'test command';
+  const grouped = process.platform !== 'win32';
+  const child = spawn(command, args, {
+    env,
+    stdio: 'inherit',
+    detached: grouped,
+  });
+  const kill = (signal) => {
+    try {
+      if (grouped && child.pid) process.kill(-child.pid, signal);
+      else child.kill(signal);
+    } catch (error) {
+      if (error.code !== 'ESRCH') throw error;
+    }
+  };
+  let timer;
+  const forward = (signal) => {
+    kill(signal);
+    timer ??= setTimeout(() => kill('SIGKILL'), 5_000);
+  };
   const onInt = () => forward('SIGINT');
   const onTerm = () => forward('SIGTERM');
   process.on('SIGINT', onInt);
@@ -49,14 +80,24 @@ try {
       child.once('exit', (code) => resolve(code ?? 1));
     });
   } finally {
+    if (timer) clearTimeout(timer);
+    // A shell may exit before its descendants. Stop those before cleanup too.
+    kill('SIGKILL');
     process.removeListener('SIGINT', onInt);
     process.removeListener('SIGTERM', onTerm);
   }
-} catch {
-  console.error(
-    'SIWC shard setup failed; access-only session missing, expired or invalid for this run',
-  );
+} catch (error) {
+  reportFailure('SIWC run', stage, error);
   process.exitCode = 1;
 } finally {
-  if (home) rmSync(home, { recursive: true, force: true });
+  if (ownedFile) {
+    try {
+      unlinkSync(ownedFile);
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        reportFailure('SIWC run', 'credential cleanup', error);
+        process.exitCode = 1;
+      }
+    }
+  }
 }

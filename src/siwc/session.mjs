@@ -4,11 +4,7 @@ export const PREPARE_VALIDITY_MS = 30 * 60_000;
 export const SHARD_VALIDITY_MS = 22 * 60_000;
 
 export function binding(env) {
-  const values = [
-    env.GITHUB_REPOSITORY,
-    env.GITHUB_RUN_ID,
-    env.GITHUB_RUN_ATTEMPT,
-  ];
+  const values = [env.GITHUB_REPOSITORY, env.GITHUB_RUN_ID];
   if (values.some((value) => typeof value !== 'string' || !value))
     throw new Error('Missing CI run identity');
   return JSON.stringify(values);
@@ -33,8 +29,11 @@ export function accessLease(
     !Number.isSafeInteger(credentials.expires_at) ||
     credentials.expires_at - now < minimumMs
   ) {
-    throw new Error(
-      'SIWC access token has insufficient lifetime for this shard; no shard may refresh it',
+    throw Object.assign(
+      new Error(
+        'SIWC access token has insufficient lifetime; rerun the entire workflow to prepare a fresh ticket',
+      ),
+      { code: 'SIWC_INSUFFICIENT_VALIDITY' },
     );
   }
   // Deliberate allowlist: never distribute identity, refresh token, or client registration.
@@ -58,6 +57,7 @@ export function seal(lease, key, context) {
 }
 
 export function unseal(ticket, key, context, now = Date.now()) {
+  let lease;
   try {
     if (
       typeof ticket !== 'string' ||
@@ -73,7 +73,7 @@ export function unseal(ticket, key, context, now = Date.now()) {
     );
     decipher.setAAD(Buffer.from(context));
     decipher.setAuthTag(bytes.subarray(12, 28));
-    const lease = JSON.parse(
+    lease = JSON.parse(
       Buffer.concat([
         decipher.update(bytes.subarray(28)),
         decipher.final(),
@@ -81,10 +81,13 @@ export function unseal(ticket, key, context, now = Date.now()) {
     );
     if (Object.keys(lease).sort().join(',') !== 'access_token,expires_at')
       throw new Error();
-    return accessLease(lease, now);
-  } catch {
-    throw new Error('Invalid or expired SIWC shard ticket for this CI run');
+  } catch (error) {
+    throw new Error(
+      'Invalid SIWC shard ticket for this repository and workflow run',
+      { cause: error },
+    );
   }
+  return accessLease(lease, now);
 }
 
 /** Caller must hold the workflow's exclusive environment/concurrency slot. */

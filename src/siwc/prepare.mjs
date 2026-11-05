@@ -3,6 +3,7 @@ import { appendFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { binding, prepare } from './session.mjs';
+import { reportFailure } from './diagnostics.mjs';
 
 let stage = 'configuration';
 try {
@@ -15,6 +16,7 @@ try {
   ) {
     throw new Error('Missing SIWC environment or secret-write credentials');
   }
+  stage = 'credential JSON';
   const record = JSON.parse(env.SIWC_CREDENTIALS || 'null');
   function mask(credentials) {
     for (const field of ['access_token', 'refresh_token', 'id_token']) {
@@ -27,7 +29,11 @@ try {
   const require = createRequire(
     resolve(env.SIWC_PROJECT_DIRECTORY, 'package.json'),
   );
-  const { refreshSiwcCredentials } = require('@midscene/core/ai-model');
+  stage = 'SDK SIWC entry';
+  const { refreshSiwcCredentials } = require('@midscene/core/siwc');
+  if (typeof refreshSiwcCredentials !== 'function')
+    throw new TypeError('Missing public refreshSiwcCredentials');
+  stage = 'access-only handoff';
   const ticket = await prepare(record, {
     key: env.SIWC_TRANSPORT_KEY,
     context: binding(env),
@@ -71,8 +77,8 @@ try {
             'SIWC replacement persisted to the owner environment secret',
           );
           return;
-        } catch {
-          if (attempt === 2) throw new Error('Credential writeback failed');
+        } catch (error) {
+          if (attempt === 2) throw error;
           await new Promise((resolve) =>
             setTimeout(resolve, 1000 * (attempt + 1)),
           );
@@ -84,10 +90,7 @@ try {
   console.log(
     'SIWC access-only handoff ready; renewable credentials remain in the owner environment',
   );
-} catch {
-  // OAuth and gh error bodies can contain credential material. Fail without echoing them.
-  console.error(
-    `SIWC credential preparation failed during ${stage}; no shard ticket was issued. Check authorization and environment-secret write access.`,
-  );
+} catch (error) {
+  reportFailure('SIWC preparation', stage, error);
   process.exitCode = 1;
 }
