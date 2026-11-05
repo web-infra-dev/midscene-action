@@ -1,4 +1,4 @@
-# Midscene GitHub Action
+<h1 align="center">Midscene GitHub Action</h1>
 
 <p align="center">
   <a href="https://github.com/web-infra-dev/midscene-action/actions/workflows/ci.yml"><img src="https://github.com/web-infra-dev/midscene-action/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
