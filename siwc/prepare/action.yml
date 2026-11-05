@@ -1,0 +1,42 @@
+name: Prepare Midscene SIWC session
+description: Refresh and persist a serialized SIWC session, then issue an encrypted access-only ticket.
+inputs:
+  working-directory:
+    description: Project with @midscene/core installed.
+    required: true
+  environment:
+    description: Name of the Environment bound to the caller job.
+    required: true
+  credentials:
+    description: Complete Midscene record from an Environment Secret.
+    required: true
+  secret-name:
+    description: Environment Secret to update after rotating credentials.
+    default: SIWC_CREDENTIALS
+  secret-write-token:
+    description: GitHub token with Environments write permission for this repository.
+    required: true
+  transport-key:
+    description: Shared 32-byte encryption key encoded as 64 hex characters.
+    required: true
+  force-refresh:
+    description: Force one real refresh for acceptance testing.
+    default: 'false'
+outputs:
+  ticket:
+    description: Encrypted access-only ticket bound to this repository and workflow run.
+    value: ${{ steps.prepare.outputs.ticket }}
+runs:
+  using: composite
+  steps:
+    - id: prepare
+      shell: bash
+      env:
+        SIWC_PROJECT_DIRECTORY: ${{ inputs.working-directory }}
+        SIWC_ENVIRONMENT: ${{ inputs.environment }}
+        SIWC_SECRET_NAME: ${{ inputs.secret-name }}
+        SIWC_CREDENTIALS: ${{ inputs.credentials }}
+        GH_TOKEN: ${{ inputs.secret-write-token }}
+        SIWC_TRANSPORT_KEY: ${{ inputs.transport-key }}
+        SIWC_FORCE_REFRESH: ${{ inputs.force-refresh }}
+      run: node "$GITHUB_ACTION_PATH/../../src/siwc/prepare.mjs"

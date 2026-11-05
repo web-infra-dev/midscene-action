@@ -1,5 +1,5 @@
 name: Midscene Action
-description: Run Midscene tests in GitHub Actions and publish test reports to Cloudflare Workers.
+description: Run Midscene tests in GitHub Actions and publish native reports to Cloudflare Workers.
 branding:
   icon: activity
   color: white
@@ -17,7 +17,7 @@ inputs:
     description: Raw report retention in days.
     default: '14'
   publish-pages:
-    description: Set true to deploy the native report to Cloudflare Workers after testing.
+    description: Set true to deploy the native report to Cloudflare after testing.
     default: 'false'
   cloudflare-api-token:
     description: Cloudflare API token. Workers Admin is needed to create a Worker; Editor can target an existing Worker. Required when publishing.
@@ -37,7 +37,7 @@ outputs:
     description: Test command step outcome.
     value: ${{ steps.test.outcome }}
   page-url:
-    description: URL of this run’s Cloudflare Workers report, or empty when deployment did not succeed.
+    description: URL of this run's Cloudflare report, or empty when deployment did not succeed.
     value: ${{ steps.deployment.outputs.preview-deployment-url }}
   publication-result:
     description: Deployment step outcome (success, failure, skipped, or cancelled).
@@ -136,6 +136,12 @@ runs:
           echo '::error::Cloudflare uploaded the report but returned no deployment URL. Open Workers & Pages > your Worker > Domains > Worker URL and enable Preview, then rerun the workflow.'
           exit 1
         fi
+        if [[ "$PAGE_URL" != https://* ]]; then
+          echo '::error::Cloudflare returned a non-HTTPS report URL.'
+          exit 1
+        fi
+        curl --fail --silent --show-error --retry 3 --max-time 30 "$PAGE_URL" -o "$RUNNER_TEMP/midscene-published-report.html"
+        grep -q 'midscene_test_run_dump' "$RUNNER_TEMP/midscene-published-report.html"
         echo "[Open the Midscene Test report ↗]($PAGE_URL)" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Preserve command failure

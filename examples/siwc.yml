@@ -1,0 +1,71 @@
+# Copy into .github/workflows/ after provisioning the secrets in docs/siwc.md.
+# Pin all three uses to the same reviewed release/SHA when adopting the example.
+name: SIWC parallel regression
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  credentials:
+    runs-on: ubuntu-latest
+    environment: midscene-siwc
+    concurrency:
+      group: midscene-siwc-refresh-owner
+      cancel-in-progress: false
+      queue: max
+    outputs:
+      ticket: ${{ steps.session.outputs.ticket }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --prefix tests/midscene
+      - uses: web-infra-dev/midscene-action/siwc/prepare@main
+        id: session
+        with:
+          working-directory: tests/midscene
+          environment: midscene-siwc
+          credentials: ${{ secrets.SIWC_CREDENTIALS }}
+          secret-write-token: ${{ secrets.SIWC_SECRET_WRITE_TOKEN }}
+          transport-key: ${{ secrets.SIWC_TRANSPORT_KEY }}
+  test:
+    needs: credentials
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --prefix tests/midscene
+      # Install the project's browsers/device tooling before this step.
+      - uses: web-infra-dev/midscene-action/siwc/run@main
+        env:
+          # The project's command must implement disjoint case selection.
+          TEST_SHARD: ${{ matrix.shard }}
+          MIDSCENE_MODEL_NAME: gpt-6.1-terra
+          MIDSCENE_MODEL_FAMILY: gpt-6
+          MIDSCENE_MODEL_PROTOCOL: openai-responses
+        with:
+          working-directory: tests/midscene
+          command: npm test
+          ticket: ${{ needs.credentials.outputs.ticket }}
+          transport-key: ${{ secrets.SIWC_TRANSPORT_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: midscene-shard-${{ matrix.shard }}
+          include-hidden-files: true
+          path: |
+            tests/midscene/midscene_run/
+            tests/midscene/.midscene/test-results/
+
+# Add one report job to download and merge the shard reports with Midscene,
+# then invoke the root Action with command: <your merge command> and publication.

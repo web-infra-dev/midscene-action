@@ -1,0 +1,25 @@
+name: Run with Midscene SIWC
+description: Run a command with an isolated access-only SIWC session, then remove the temporary session.
+inputs:
+  working-directory:
+    description: Directory in which to run the command.
+    required: true
+  command:
+    description: Caller command, executed with bash and pipefail.
+    required: true
+  ticket:
+    description: Encrypted ticket from the serialized prepare job.
+    required: true
+  transport-key:
+    description: The same encryption key used by the prepare job.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        SIWC_TICKET: ${{ inputs.ticket }}
+        SIWC_TRANSPORT_KEY: ${{ inputs.transport-key }}
+        TEST_COMMAND: ${{ inputs.command }}
+      run: node "$GITHUB_ACTION_PATH/../../src/siwc/run.mjs" bash -e -o pipefail -c "$TEST_COMMAND"
