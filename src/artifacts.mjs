@@ -11,44 +11,25 @@ function validatePath(value) {
   return value;
 }
 
-export function resolveArtifactRoots(projectDirectory, input, environment) {
-  const configured = input ? validatePath(input) : undefined;
-  const inherited =
-    environment === undefined ? undefined : validatePath(environment);
-  if (
-    configured !== undefined &&
-    inherited !== undefined &&
-    path.resolve(projectDirectory, configured) !==
-      path.resolve(projectDirectory, inherited)
-  )
-    throw new Error(
-      'run-directory and MIDSCENE_RUN_DIR must resolve to the same directory.',
-    );
-  const selected = configured ?? inherited;
-  const root = validatePath(
-    path.resolve(projectDirectory, selected ?? 'midscene_run'),
+export function resolveArtifactRoots(projectDirectory, environment) {
+  const root = path.resolve(
+    projectDirectory,
+    validatePath(environment || 'midscene_run'),
   );
   return root === path.resolve(projectDirectory, 'midscene_run')
     ? [root, path.resolve(projectDirectory, '.midscene')]
     : [root];
 }
 
-export function artifactRoots(projectDirectory = process.cwd()) {
-  if (process.env.MIDSCENE_ARTIFACT_ROOTS) {
-    const roots = JSON.parse(process.env.MIDSCENE_ARTIFACT_ROOTS);
-    if (
-      !Array.isArray(roots) ||
-      !roots.length ||
-      roots.some((root) => !path.isAbsolute(validatePath(root)))
-    )
-      throw new Error('Invalid resolved Midscene artifact directories.');
-    return [...new Set(roots)];
-  }
-  return resolveArtifactRoots(
-    projectDirectory,
-    process.env.MIDSCENE_ACTION_RUN_DIR,
-    process.env.MIDSCENE_RUN_DIR,
-  );
+export function artifactRoots() {
+  const roots = JSON.parse(process.env.MIDSCENE_ARTIFACT_ROOTS || 'null');
+  if (
+    !Array.isArray(roots) ||
+    !roots.length ||
+    roots.some((root) => !path.isAbsolute(validatePath(root)))
+  )
+    throw new Error('Invalid resolved Midscene artifact directories.');
+  return roots;
 }
 
 export async function resultFiles(roots, filename) {
@@ -77,11 +58,7 @@ export async function resultFiles(roots, filename) {
 async function run() {
   const roots =
     process.argv[2] === 'paths'
-      ? resolveArtifactRoots(
-          process.cwd(),
-          process.env.MIDSCENE_ACTION_RUN_DIR,
-          process.env.MIDSCENE_RUN_DIR,
-        )
+      ? resolveArtifactRoots(process.cwd(), process.env.MIDSCENE_RUN_DIR)
       : artifactRoots();
   if (process.argv[2] === 'paths') {
     await appendFile(
@@ -102,10 +79,20 @@ async function run() {
   const files = await resultFiles(roots, 'result.md');
   const results = await Promise.all(
     files.map(async (file) =>
-      (await readFile(file, 'utf8')).replace(
-        /^\[Open the Midscene Test report ↗\]\([^\r\n]*\)\r?\n?/gm,
-        '',
-      ),
+      (await readFile(file, 'utf8'))
+        .replace(/^## Midscene Test(?:\r?\n|$)/, '')
+        .replace(
+          /^!\[Midscene Test: .*\]\(https:\/\/badge\.midscenejs\.com\/e2e\?[^\r\n]*(?:\r?\n|$)/gm,
+          '',
+        )
+        .replace(
+          /^(?:✅ \*\*\d+\/\d+ passed\*\*|❌ \*\*\d+ failed\*\* · \d+ passed · \d+ not run) · (?:\d+m )?\d+s(?:\r?\n|$)/gm,
+          '',
+        )
+        .replace(
+          /^\[Open the Midscene Test report ↗\]\([^\r\n]*\)\r?\n?/gm,
+          '',
+        ),
     ),
   );
   const download = `[Download test artifacts](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}#artifacts)`;
@@ -115,7 +102,7 @@ async function run() {
   );
   if (!files.length)
     throw new Error(
-      'No Midscene Test result.md found. Check the test command and the MIDSCENE_RUN_DIR or run-directory setting.',
+      'No Midscene Test result.md found. Check the test command and the MIDSCENE_RUN_DIR setting.',
     );
 }
 

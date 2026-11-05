@@ -1,0 +1,14 @@
+{
+  "name": "midscene-action-external-assets-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "midscene-test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@midscene/test": "1.17.5",
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3"
+  }
+}

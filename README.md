@@ -1,4 +1,4 @@
-# Midscene GitHub Action
+<h1 align="center">Midscene GitHub Action</h1>
 
 <p align="center">
   <a href="https://github.com/web-infra-dev/midscene-action/actions/workflows/ci.yml"><img src="https://github.com/web-infra-dev/midscene-action/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -20,6 +20,7 @@ Run [Midscene Test](https://midscenejs.com/midscene-test/overview.html) tests in
 
 - [Basic](.github/workflows/example-basic.yml): submit a greeting form with AI and check the result.
 - [TodoMVC](.github/workflows/example-todomvc.yml): manage todos with AI and verify the results with custom Nodes.
+- [ExternalAssets](.github/workflows/example-external-assets.yml): generate an `html-and-external-assets` report with a model-free test.
 
 ## Usage
 
@@ -82,17 +83,16 @@ Set the model secret and variables used above in your repository's **Settings â†
 
 See [action.yml](action.yml) for the full definitions.
 
-| Input                    | Required        | Default                              | Description                                                                                              |
-| ------------------------ | --------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `working-directory`      | Yes             | None                                 | Test project directory, relative to the workspace. Use `.` for the repository root.                      |
-| `command`                | No              | `npx midscene-test`                  | Command to run Midscene tests in Bash. Override it with a project script such as `npm test` if needed.   |
-| `run-directory`          | No              | `MIDSCENE_RUN_DIR` or `midscene_run` | Artifact root, relative to `working-directory` or absolute. Passed to the command as `MIDSCENE_RUN_DIR`. |
-| `artifact-name`          | No              | `midscene-results`                   | Artifact name. Must be unique within a workflow run.                                                     |
-| `retention-days`         | No              | `14`                                 | Artifact retention period in days.                                                                       |
-| `publish-pages`          | No              | `false`                              | Set to `true` to publish reports to Cloudflare Workers.                                                  |
-| `cloudflare-api-token`   | When publishing | None                                 | Cloudflare API token, passed from a GitHub Actions secret.                                               |
-| `cloudflare-account-id`  | When publishing | None                                 | Cloudflare account ID.                                                                                   |
-| `cloudflare-worker-name` | No              | `midscene-reports`                   | Worker name. Created automatically if needed and the token has permission.                               |
+| Input                    | Required        | Default             | Description                                                                                            |
+| ------------------------ | --------------- | ------------------- | ------------------------------------------------------------------------------------------------------ |
+| `working-directory`      | Yes             | None                | Test project directory, relative to the workspace. Use `.` for the repository root.                    |
+| `command`                | No              | `npx midscene-test` | Command to run Midscene tests in Bash. Override it with a project script such as `npm test` if needed. |
+| `artifact-name`          | No              | `midscene-results`  | Artifact name. Must be unique within a workflow run.                                                   |
+| `retention-days`         | No              | `14`                | Artifact retention period in days.                                                                     |
+| `publish-pages`          | No              | `false`             | Set to `true` to publish reports to Cloudflare Workers.                                                |
+| `cloudflare-api-token`   | When publishing | None                | Cloudflare API token, passed from a GitHub Actions secret.                                             |
+| `cloudflare-account-id`  | When publishing | None                | Cloudflare account ID.                                                                                 |
+| `cloudflare-worker-name` | No              | `midscene-reports`  | Worker name. Created automatically if needed and the token has permission.                             |
 
 ## Publish reports to Cloudflare Workers
 
@@ -140,18 +140,20 @@ To use an existing Worker, set `cloudflare-worker-name` to its name. The default
 
 Open the workflow run's **Summary** for test results and artifact downloads. Published reports also have an online preview link.
 
-Results are collected from `midscene_run/` by default. To use another directory, set `run-directory` or `MIDSCENE_RUN_DIR`; if both are set, they must point to the same directory.
+Results are collected from `midscene_run/` by default. Set `MIDSCENE_RUN_DIR` to use another artifact root. Relative paths resolve from `working-directory`; absolute paths are also supported. An unset or empty value uses the default.
 
-To save results under `artifacts/`, set the Action input:
+To save results under `artifacts/`, set the environment variable:
 
 ```yaml
 - uses: web-infra-dev/midscene-action@v1
   with:
     working-directory: tests/midscene
-    run-directory: artifacts
+  env:
+    MIDSCENE_RUN_DIR: artifacts
 ```
 
-Cloudflare publication supports both single HTML and external-asset reports. Publishing requires exactly one Test run in the selected results directory. If the command does not produce Midscene Test results, the Summary step reports an error with a configuration hint.
+> [!NOTE]
+> Using `MIDSCENE_RUN_DIR` for test outputs requires `@midscene/test` > 1.17.5.
 
 ![Test results, report download, and online report links in the Summary](assets/test-summary.png)
 

@@ -1,4 +1,4 @@
-# Midscene GitHub Action
+<h1 align="center">Midscene GitHub Action</h1>
 
 <p align="center">
   <a href="https://github.com/web-infra-dev/midscene-action/actions/workflows/ci.yml"><img src="https://github.com/web-infra-dev/midscene-action/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -20,6 +20,7 @@
 
 - [Basic](.github/workflows/example-basic.yml)：使用 AI 提交问候表单并检查结果。
 - [TodoMVC](.github/workflows/example-todomvc.yml)：使用 AI 管理待办事项，并通过自定义 Node 验证结果。
+- [ExternalAssets](.github/workflows/example-external-assets.yml)：通过无需模型的简单测试生成 `html-and-external-assets` 报告。
 
 ## 使用方法
 
@@ -82,17 +83,16 @@ jobs:
 
 完整定义见 [action.yml](action.yml)。
 
-| 参数                     | 是否必填   | 默认值                               | 说明                                                                                           |
-| ------------------------ | ---------- | ------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `working-directory`      | 是         | 无                                   | 测试项目目录，相对于工作区。仓库根目录填 `.`。                                                 |
-| `command`                | 否         | `npx midscene-test`                  | 在 Bash 中运行 Midscene 测试的命令，可按需改为 `npm test` 等项目脚本。                         |
-| `run-directory`          | 否         | `MIDSCENE_RUN_DIR` 或 `midscene_run` | 产物根目录，相对于 `working-directory`，也支持绝对路径；作为 `MIDSCENE_RUN_DIR` 传给测试命令。 |
-| `artifact-name`          | 否         | `midscene-results`                   | Artifact 名称，同一次工作流运行中必须唯一。                                                    |
-| `retention-days`         | 否         | `14`                                 | Artifact 的保留天数。                                                                          |
-| `publish-pages`          | 否         | `false`                              | 设为 `true` 时将报告发布到 Cloudflare Workers。                                                |
-| `cloudflare-api-token`   | 发布时必填 | 无                                   | Cloudflare API Token，通过 GitHub Actions Secret 传入。                                        |
-| `cloudflare-account-id`  | 发布时必填 | 无                                   | Cloudflare 账号 ID。                                                                           |
-| `cloudflare-worker-name` | 否         | `midscene-reports`                   | Worker 名称。不存在时，若 Token 有相应权限，Action 会自动创建。                                |
+| 参数                     | 是否必填   | 默认值              | 说明                                                                   |
+| ------------------------ | ---------- | ------------------- | ---------------------------------------------------------------------- |
+| `working-directory`      | 是         | 无                  | 测试项目目录，相对于工作区。仓库根目录填 `.`。                         |
+| `command`                | 否         | `npx midscene-test` | 在 Bash 中运行 Midscene 测试的命令，可按需改为 `npm test` 等项目脚本。 |
+| `artifact-name`          | 否         | `midscene-results`  | Artifact 名称，同一次工作流运行中必须唯一。                            |
+| `retention-days`         | 否         | `14`                | Artifact 的保留天数。                                                  |
+| `publish-pages`          | 否         | `false`             | 设为 `true` 时将报告发布到 Cloudflare Workers。                        |
+| `cloudflare-api-token`   | 发布时必填 | 无                  | Cloudflare API Token，通过 GitHub Actions Secret 传入。                |
+| `cloudflare-account-id`  | 发布时必填 | 无                  | Cloudflare 账号 ID。                                                   |
+| `cloudflare-worker-name` | 否         | `midscene-reports`  | Worker 名称。不存在时，若 Token 有相应权限，Action 会自动创建。        |
 
 ## 发布报告到 Cloudflare Workers
 
@@ -140,18 +140,20 @@ jobs:
 
 在工作流运行的 **Summary（摘要）** 中查看测试结果和下载报告。报告发布成功后，还会显示在线预览链接。
 
-默认从 `midscene_run/` 收集结果。通过 `run-directory` 或 `MIDSCENE_RUN_DIR` 可选择其他目录；同时设置时，两者必须指向同一目录。
+默认从 `midscene_run/` 收集结果。通过环境变量 `MIDSCENE_RUN_DIR` 可选择其他产物根目录。相对路径基于 `working-directory` 解析，也支持绝对路径；未设置或值为空时使用默认目录。
 
-将结果保存到 `artifacts/` 时，设置 Action 输入：
+将结果保存到 `artifacts/` 时，设置环境变量：
 
 ```yaml
 - uses: web-infra-dev/midscene-action@v1
   with:
     working-directory: tests/midscene
-    run-directory: artifacts
+  env:
+    MIDSCENE_RUN_DIR: artifacts
 ```
 
-Cloudflare 发布支持单 HTML 和外置资源报告。所选结果目录中需恰好有一轮 Test 运行。测试命令未产出 Midscene Test 结果时，Summary 步骤会报错并提示检查配置。
+> [!NOTE]
+> 使用 `MIDSCENE_RUN_DIR` 统一配置测试产物，需要 `@midscene/test` 高于 1.17.5。
 
 ![Summary 中的测试结果、报告下载和在线报告入口](assets/test-summary.png)
 
