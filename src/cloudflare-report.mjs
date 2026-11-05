@@ -110,7 +110,10 @@ async function prepare() {
       previews: {},
     }),
   );
-  await appendFile(process.env.GITHUB_OUTPUT, `directory=${directory}\n`);
+  await appendFile(
+    process.env.GITHUB_OUTPUT,
+    `directory=${directory}\nassets=${assets}\n`,
+  );
 }
 
 try {
